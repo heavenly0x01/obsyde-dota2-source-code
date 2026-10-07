@@ -162,6 +162,29 @@ static void DrawBar(ImDrawList* dl, ImVec2 a, float w, float h, float frac,
         DTextC(dl, text, a.x + w * 0.5f, a.y - 14.f, theme::White);
 }
 
+static void DrawSegTicks(ImDrawList* dl, ImVec2 a, float w, float h,
+                         float maxV, float segV) {
+    if (!(segV > 1.f) || !(maxV > 0.f)) return;
+    int n = (int)(maxV / segV);
+    if (n < 2 || n > 80) return;
+    for (int k = 1; k < n; ++k) {
+        float x = a.x + w * ((float)k * segV / maxV);
+        dl->AddLine(ImVec2(x, a.y + 1.f), ImVec2(x, a.y + h - 1.f),
+                    IM_COL32(0, 0, 0, 185), 1.f);
+    }
+}
+
+static void DrawStar(ImDrawList* dl, ImVec2 c, float r, ImU32 col) {
+    ImVec2 pts[10];
+    for (int i = 0; i < 10; ++i) {
+        float ang = -1.5707963f + (float)i * 0.62831853f;
+        float rr  = (i & 1) ? r * 0.44f : r;
+        pts[i] = ImVec2(c.x + cosf(ang) * rr, c.y + sinf(ang) * rr);
+    }
+    dl->AddConvexPolyFilled(pts, 10, col);
+    dl->AddPolyline(pts, 10, IM_COL32(0, 0, 0, 220), 0, 1.6f);
+}
+
 static void FmtTime(float sec, char* out, int cap) {
     if (!(sec >= 0.f)) sec = 0.f;
     if (sec > 35999.f) sec = 35999.f;
@@ -231,6 +254,8 @@ static void DrawHero(const Frame& f, const FrameUnit& u, bool enemy, ImDrawList*
     float hpFrac = (u.maxHp > 0) ? (float)u.hp / (float)u.maxHp : 0.f;
     DrawBar(dl, ImVec2(bx, barY), barW, 8.f, hpFrac,
             enemy ? theme::Purple : theme::PurpleDim, false, nullptr);
+    if (cfg::lastHit && u.dmgOut > 1.f && u.alive)
+        DrawSegTicks(dl, ImVec2(bx, barY), barW, 8.f, (float)u.maxHp, u.dmgOut);
 
     if (u.maxMana > 0.f) {
         float mf = u.mana / u.maxMana;
@@ -296,17 +321,31 @@ static void DrawCreepMarkers(const Frame& f, const FrameUnit& u, ImDrawList* dl)
     Vec3 tp{ u.pos.x, u.pos.y, u.pos.z + 90.f };
     if (!view::W2S(tp, p)) return;
 
-    char buf[48];
+    float nextY = p.y;
     if (lh) {
-        if (u.hits > 1) snprintf(buf, sizeof(buf), "LH %d", u.hits);
-        else            snprintf(buf, sizeof(buf), "LH!");
-        DTextC(dl, buf, p.x, p.y, IM_COL32(205, 155, 255, 255), 18.f);
-        dl->AddLine(ImVec2(p.x - 9.f, p.y + 18.f), ImVec2(p.x + 9.f, p.y + 18.f),
-                    IM_COL32(205, 155, 255, 255), 2.4f);
+        ImU32 col;
+        if (u.canLastHit)      col = IM_COL32(80, 235, 120, 255);
+        else if (u.hits <= 3)  col = IM_COL32(255, 214, 60, 255);
+        else                   col = IM_COL32(255, 214, 60, 150);
+
+        DrawStar(dl, ImVec2(p.x, p.y), 9.f, col);
+        if (!u.canLastHit && u.hits > 1) {
+            char n[8];
+            snprintf(n, sizeof(n), "%d", u.hits);
+            DTextC(dl, n, p.x + 18.f, p.y - 8.f,
+                   theme::WithAlpha(theme::White, 225), 14.f);
+        }
+
+        float bw = 44.f, bx = p.x - bw * 0.5f, by = p.y + 12.f;
+        float frac = (u.maxHp > 0) ? (float)u.hp / (float)u.maxHp : 0.f;
+        DrawBar(dl, ImVec2(bx, by), bw, 5.f, frac, col, false, nullptr);
+        if (u.dmgOut > 1.f)
+            DrawSegTicks(dl, ImVec2(bx, by), bw, 5.f, (float)u.maxHp, u.dmgOut);
+        nextY = by + 7.f;
     }
     if (dn) {
-        float y = p.y + (lh ? 22.f : 0.f);
-        DTextC(dl, "DENY", p.x, y, theme::WithAlpha(theme::White, 235), 15.f);
+        DTextC(dl, "DENY", p.x, lh ? nextY + 4.f : p.y,
+               theme::WithAlpha(theme::White, 235), 15.f);
     }
 }
 
@@ -770,6 +809,7 @@ static void ApplyVision(const Frame& f) {
 void DrawOverlay(const Frame& f) {
     ImDrawList* dl = ImGui::GetBackgroundDrawList();
     if (!dl || !f.ok) return;
+    if (f.gameState == 6 || f.gameState == 7) return;
 
     ResolveMode(f);
 
@@ -856,6 +896,7 @@ void RunAutomation(const Frame& f) {
     g_dodgeWarn = false;
 
     if (!f.ok) return;
+    if (f.gameState == 6 || f.gameState == 7) return;
     if (!cfg::farmBot && !cfg::farmAuto && !cfg::dodger && !cfg::autoDodge) return;
 
     HWND hwnd = GameHwnd();
@@ -1074,8 +1115,8 @@ static void AutoAcceptTick() {
     typedef bool  (*SendReadyFn)(void*, int);
     typedef void* (*GetGlobalFn)();
 
-    GetMatchFn getMatch = (GetMatchFn)(base + 0x1D60680);
-    void* mm = getMatch((void*)(base + 0x6368848));
+    GetMatchFn getMatch = (GetMatchFn)(base + 0x1D7A810);
+    void* mm = getMatch((void*)(base + 0x63CAE18));
     void* st = mm ? *(void**)((char*)mm + 0x18) : nullptr;
     if (!st) return;
 
@@ -1083,11 +1124,11 @@ static void AutoAcceptTick() {
     if (phase != 15) return;
     if (s_sentAt && now - s_sentAt < 2000) return;
 
-    GetGlobalFn getGlobal = (GetGlobalFn)(base + 0x22715F0);
+    GetGlobalFn getGlobal = (GetGlobalFn)(base + 0x2286C90);
     void* g = getGlobal();
     if (!g) return;
 
-    SendReadyFn sendReady = (SendReadyFn)(base + 0x227D400);
+    SendReadyFn sendReady = (SendReadyFn)(base + 0x2292C40);
     sendReady(g, 1);
     s_sentAt = now;
 }

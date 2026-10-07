@@ -228,7 +228,7 @@ void DrawMenuWindow() {
     if (!s_styled) { s_styled = true; theme::ApplyStyle(); }
 
     static int s_tab = 0;
-    const char* kTabs[5] = { "ESP", "VISION", "OVERLAY", "AUTO", "HELP" };
+    const char* kTabs[6] = { "ESP", "VISION", "CAMERA", "OVERLAY", "AUTO", "HELP" };
 
     ImGui::SetNextWindowPos(ImVec2(30, 30), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(520.f, 430.f), ImGuiCond_FirstUseEver);
@@ -275,7 +275,7 @@ void DrawMenuWindow() {
 
     const float navW = 108.f, navGap = 14.f, navX = wp.x + 12.f;
     float navY = wp.y + headerH + 8.f;
-    for (int i = 0; i < 5; ++i) {
+    for (int i = 0; i < 6; ++i) {
         ImGui::SetCursorScreenPos(ImVec2(navX, navY + i * 34.f));
         bool sel = (s_tab == i);
         if (sel) {
@@ -326,7 +326,24 @@ void DrawMenuWindow() {
         Hint("glow is client side, best effort in offline");
         break;
 
-    case 2:
+    case 2: {
+        TabTitle("CAMERA");
+        Toggle("custom distance", &cfg::camEnable, 10);
+        if (cfg::camEnable) {
+            float d = cfg::camDistance;
+            ImGui::TextUnformatted("distance");
+            ImGui::SameLine(120.f);
+            ImGui::SetNextItemWidth(180.f);
+            ImGui::SliderFloat("##camd", &d, 200.f, 3000.f, "%.0f");
+            if (d != cfg::camDistance) cfg::camDistance = d;
+        }
+        ImGui::Spacing();
+        Hint("custom distance overrides the game zoom");
+        Hint("range 200 - 3000, 0 = back to game default");
+        break;
+    }
+
+    case 3:
         TabTitle("OVERLAY");
         Toggle("dota plus panel",   &cfg::dotaPlus, 9);
         Toggle("keybinds widget",   &cfg::showKeybinds);
@@ -336,7 +353,7 @@ void DrawMenuWindow() {
         Hint("open this menu and drag the widget to move it");
         break;
 
-    case 3:
+    case 4:
         TabTitle("AUTO");
         Toggle("auto accept",       &cfg::autoAccept, 2);
         Toggle("dodge alerts",      &cfg::dodger);
@@ -348,11 +365,12 @@ void DrawMenuWindow() {
         Hint("bot clicks the mouse, runs only while the game is focused");
         break;
 
-    case 4:
+    case 5:
     default:
         TabTitle("HELP");
-        Hint("LH  - creep you can last hit now");
-        Hint("LH 2 - needs 2 hits first");
+        Hint("green star - creep you can last hit right now");
+        Hint("yellow star - soon, number = hits left to soften it");
+        Hint("creep bar segments = your right click damage");
         Hint("DENY - friendly creep below 50%");
         Hint("1: 20s - skill 1 ready in 20 s");
         Hint("arrow at the screen edge - target is off screen");

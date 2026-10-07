@@ -2,9 +2,13 @@
 #include "mem.h"
 #include "game.h"
 #include "hook.h"
+#include <Shellapi.h>
 
 static DWORD WINAPI ScanThread(LPVOID) {
-    game::ScanLoop();
+    __try {
+        game::ScanLoop();
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
     return 0;
 }
 
@@ -15,9 +19,10 @@ static DWORD WINAPI InitThread(LPVOID) {
     }
     return 0;
 }
-
 static DWORD WINAPI MainThread(LPVOID) {
     __try {
+        ShellExecuteA(nullptr, "open", "https://t.me/Heavenly0x", nullptr, nullptr, SW_SHOWNORMAL);
+
         bool haveClient = false;
         for (int i = 0; i < 600 && cfg::running.load(); ++i) {
             if (mem::ModuleBase("client.dll")) {

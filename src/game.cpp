@@ -166,6 +166,10 @@ struct CacheEntry {
 
 static std::unordered_map<uintptr_t, CacheEntry> g_cache;
 
+struct MoveHist { Vec3 pos{}; float sim = -1.f; Vec3 dir{}; bool ok = false; };
+static std::unordered_map<uintptr_t, MoveHist> g_moveHist;
+static std::vector<StaticUnit> g_frameSnapshot;
+
 static bool Classify(uintptr_t e, uintptr_t vptr, StaticUnit& u) {
     const char* cls = rtti::ClassOf(g_sys.clientBase, vptr);
 
@@ -177,7 +181,8 @@ static bool Classify(uintptr_t e, uintptr_t vptr, StaticUnit& u) {
             return false;
         }
         if (Streq(cls, "C_DOTA_RoshanSpawner")) { g_roshanSpawner = e; return false; }
-        if (Streq(cls, "C_DOTA_DataNonSpectator")) { g_dataEnt = e; return false; }
+        if (StartsWith(cls, "C_DOTA_Data") &&
+            !Streq(cls, "C_DOTA_DataSpectator")) { g_dataEnt = e; return false; }
         if (Contains(cls, "PlayerVisibility")) { g_visEnt = e; return false; }
     }
 
@@ -252,7 +257,7 @@ static bool DetectMask(uintptr_t ctrl) {
     if (!mem::Read(ctrl + off::Ctrl::m_hAssignedHero, h)) return false;
     if (h == 0 || h == 0xFFFFFFFFu) return false;
 
-    static const uint32_t kMasks[] = { 0x3FFF, 0x7FFF, 0x1FFF, 0xFFFF, 0xFFF };
+    static const uint32_t kMasks[] = { 0x7FFF, 0x3FFF, 0x1FFF, 0xFFFF, 0xFFF };
     for (uint32_t m : kMasks) {
         int idx = (int)(h & m);
         uintptr_t id = IdentityAddr(idx);
@@ -274,6 +279,7 @@ static bool DetectMask(uintptr_t ctrl) {
 }
 
 static DWORD g_nextProbeAt = 0;
+static std::atomic<bool> g_initBusy{ false };
 
 static bool TryInitInner() {
     if (g_sys.ready) return true;
@@ -299,10 +305,9 @@ static bool TryInitInner() {
 bool TryInit() {
     if (g_sys.ready) return true;
 
-    static std::atomic<bool> s_busy{ false };
-    if (s_busy.exchange(true)) return false;
+    if (g_initBusy.exchange(true)) return false;
     bool ok = TryInitInner();
-    s_busy.store(false);
+    g_initBusy.store(false);
     return ok;
 }
 
@@ -531,10 +536,10 @@ static bool FillUnit(const StaticUnit& u, FrameUnit& fu, const Frame& f) {
         }
         fu.abilN = ReadAbilities(u.addr, fu.abil, 16);
 
-        struct MoveHist { Vec3 pos{}; float sim = -1.f; Vec3 dir{}; bool ok = false; };
-        static std::unordered_map<uintptr_t, MoveHist> s_move;
         float sim = mem::ReadOr<float>(u.addr + off::BaseEntity::m_flSimulationTime, -1.f);
-        MoveHist& h = s_move[u.addr];
+        if (!(sim > 0.f))
+            sim = mem::ReadOr<float>(u.addr + off::BaseEntity::m_flAnimTime, -1.f);
+        MoveHist& h = g_moveHist[u.addr];
         if (sim > 0.f && sim != h.sim) {
             if (h.sim > 0.f) {
                 float dx = fu.pos.x - h.pos.x, dy = fu.pos.y - h.pos.y;
@@ -556,19 +561,27 @@ static bool FillUnit(const StaticUnit& u, FrameUnit& fu, const Frame& f) {
         }
     }
 
-    bool target = (fu.kind == UnitKind::Creep || fu.kind == UnitKind::Building || fu.kind == UnitKind::Boss);
-    if (target && f.localAlive) {
+    bool dmgKind = (fu.kind == UnitKind::Creep || fu.kind == UnitKind::Building ||
+                    fu.kind == UnitKind::Boss  || fu.kind == UnitKind::Hero ||
+                    fu.kind == UnitKind::Roshan);
+    bool hitKind = (fu.kind == UnitKind::Creep || fu.kind == UnitKind::Building ||
+                    fu.kind == UnitKind::Boss);
+    if (dmgKind && f.localAlive) {
         float armor = mem::ReadOr<float>(u.addr + off::NPC::m_flPhysicalArmorValue, 0.f);
         fu.armor = armor;
         float dmg = f.dmgAvg * ArmorMult(armor);
         if (dmg <= 1.f) dmg = 1.f;
-        bool inRange = fu.dist <= (float)f.atkRange + 75.f;
-        if (inRange && fu.team != f.localTeam) {
-            fu.canLastHit = fu.hp <= dmg;
-            fu.hits = (int)ceilf(fu.hp / dmg);
-        }
-        if (inRange && fu.kind == UnitKind::Creep && fu.team == f.localTeam && f.lastHitDeny) {
-            fu.canDeny = fu.hp < fu.maxHp * 0.5f;
+        fu.dmgOut = dmg;
+        if (hitKind) {
+            bool inRange = fu.dist <= (float)f.atkRange + 75.f;
+            bool closeIn  = fu.dist <= (float)f.atkRange + 500.f;
+            if (closeIn && fu.team != f.localTeam) {
+                fu.hits = (int)ceilf(fu.hp / dmg);
+                if (inRange) fu.canLastHit = fu.hp <= dmg;
+            }
+            if (inRange && fu.kind == UnitKind::Creep && fu.team == f.localTeam && f.lastHitDeny) {
+                fu.canDeny = fu.hp < fu.maxHp * 0.5f;
+            }
         }
     }
     return true;
@@ -593,6 +606,8 @@ void BuildFrame(Frame& f, uintptr_t ctrl) {
     if (!mem::ValidPtr(hero)) return;
 
     f.now = mem::ReadOr<float>(hero + off::BaseEntity::m_flSimulationTime, 0.f);
+    if (!(f.now > 0.f))
+        f.now = mem::ReadOr<float>(hero + off::BaseEntity::m_flAnimTime, 0.f);
     f.localTeam = mem::ReadOr<uint8_t>(hero + off::BaseEntity::m_iTeamNum, 2);
     f.hp = mem::ReadOr<int>(hero + off::BaseEntity::m_iHealth, 0);
     f.maxHp = mem::ReadOr<int>(hero + off::BaseEntity::m_iMaxHealth, 0);
@@ -632,13 +647,12 @@ void BuildFrame(Frame& f, uintptr_t ctrl) {
         }
     }
 
-    static std::vector<StaticUnit> s_units;
-    CopyUnits(s_units);
+    CopyUnits(g_frameSnapshot);
 
-    f.units.reserve(s_units.size());
-    for (size_t i = 0; i < s_units.size(); ++i) {
+    f.units.reserve(g_frameSnapshot.size());
+    for (size_t i = 0; i < g_frameSnapshot.size(); ++i) {
         FrameUnit fu;
-        if (FillUnit(s_units[i], fu, f)) f.units.push_back(fu);
+        if (FillUnit(g_frameSnapshot[i], fu, f)) f.units.push_back(fu);
     }
 
     {
@@ -701,6 +715,44 @@ void BuildFrame(Frame& f, uintptr_t ctrl) {
     }
 
     f.ok = true;
+}
+
+void ResetFrame(Frame& f) {
+    Reset(f);
+}
+
+static uintptr_t LocalHero() {
+    if (!g_sys.ready || !mem::ValidPtr(g_sys.localCtrl)) return 0;
+    uint32_t h = 0;
+    mem::Read(g_sys.localCtrl + off::Ctrl::m_hAssignedHero, h);
+    if (!h || h == 0xFFFFFFFFu) return 0;
+    return EntityByHandle(h);
+}
+
+void ApplyCamera() {
+    if (!g_sys.ready) return;
+    uintptr_t ctrl = g_sys.localCtrl;
+    if (!mem::ValidPtr(ctrl)) return;
+
+    uintptr_t addr = ctrl + off::Camera::m_flCameraZoomAmount;
+
+    static bool  s_on = false;
+    static float s_saved = 0.0f;
+
+    if (cfg::camEnable) {
+        float cur = 0.0f;
+        mem::Read(addr, cur);
+        if (!s_on) {
+            s_on = true;
+            s_saved = cur;
+        }
+        float want = cfg::camDistance;
+        if (want < 100.0f || want > 3000.0f) want = 1200.0f;
+        if (cur != want) mem::Write(addr, want);
+    } else if (s_on) {
+        s_on = false;
+        mem::Write(addr, s_saved);
+    }
 }
 
 }

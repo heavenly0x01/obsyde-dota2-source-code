@@ -79,6 +79,7 @@ struct FrameUnit {
     bool  canLastHit = false;
     bool  canDeny = false;
     int   hits = 0;
+    float dmgOut = 0.f;
 };
 
 struct Frame {
@@ -135,6 +136,8 @@ extern uintptr_t g_modeEnt;
 bool  TryInit();
 void  ScanLoop();
 void  BuildFrame(Frame& out, uintptr_t localCtrl);
+void  ResetFrame(Frame& out);
+void  ApplyCamera();
 
 uintptr_t EntityByIndex(int index);
 uintptr_t EntityByHandle(uint32_t handle);

@@ -4,17 +4,17 @@
 
 namespace off {
 
-inline constexpr uintptr_t dwViewMatrix            = 0x61C4F10;
+inline constexpr uintptr_t dwViewMatrix            = 0x621EB30;
 
-inline constexpr uintptr_t esysRva[3]     = { 0x5E52CC0, 0x61A84E0, 0x653DB10 };
-inline constexpr uintptr_t esysVtableRva  = 0x480C0F0;
+inline constexpr uintptr_t esysRva[3]     = { 0x5ED7F70, 0x65A7058, 0x61FD808 };
+inline constexpr uintptr_t esysVtableRva  = 0x48AA168;
 inline constexpr uintptr_t idPagesOff     = 0x10;
 inline constexpr int       idStride       = 0x70;
 inline constexpr int       entsPerPage    = 512;
-inline constexpr int       maxIdPages     = 8;
+inline constexpr int       maxIdPages     = 64;
 inline constexpr int       instEntity     = 0x10;
 inline constexpr int       idHandleFld    = 0x10;
-inline constexpr uint32_t  handleMask     = 0x3FFF;
+inline constexpr uint32_t  handleMask     = 0x7FFF;
 
 namespace BaseEntity {
     inline constexpr uintptr_t m_pGameSceneNode = 0x330;
@@ -22,6 +22,7 @@ namespace BaseEntity {
     inline constexpr uintptr_t m_iHealth         = 0x34C;
     inline constexpr uintptr_t m_lifeState       = 0x354;
     inline constexpr uintptr_t m_flSimulationTime= 0x3B8;
+    inline constexpr uintptr_t m_flAnimTime      = 0x3B4;
     inline constexpr uintptr_t m_iTeamNum        = 0x3E7;
     inline constexpr uintptr_t m_hOwnerEntity    = 0x514;
 }
@@ -32,10 +33,10 @@ namespace SceneNode {
 }
 
 namespace ModelEntity {
-    inline constexpr uintptr_t m_iViewerID             = 0x77C;
-    inline constexpr uintptr_t m_iTeamVisibilityBitmask= 0x780;
-    inline constexpr uintptr_t m_bVisibilityDirtyFlag  = 0x789;
-    inline constexpr uintptr_t m_Glow                  = 0x8F0;
+    inline constexpr uintptr_t m_iViewerID             = 0x784;
+    inline constexpr uintptr_t m_iTeamVisibilityBitmask= 0x788;
+    inline constexpr uintptr_t m_bVisibilityDirtyFlag  = 0x791;
+    inline constexpr uintptr_t m_Glow                  = 0x8F8;
 }
 
 namespace Glow {
@@ -50,33 +51,44 @@ namespace Glow {
 }
 
 namespace NPC {
-    inline constexpr uintptr_t m_iCurrentLevel      = 0xBAC;
-    inline constexpr uintptr_t m_bIsAncient         = 0xBB0;
-    inline constexpr uintptr_t m_bIsBossCreature    = 0xBB1;
-    inline constexpr uintptr_t m_bConsideredHero    = 0xBB7;
-    inline constexpr uintptr_t m_iAttackRange       = 0xBD8;
-    inline constexpr uintptr_t m_iHealthBarOffset   = 0xBFC;
-    inline constexpr uintptr_t m_flMana             = 0xC04;
-    inline constexpr uintptr_t m_flMaxMana          = 0xC08;
-    inline constexpr uintptr_t m_vecAbilities       = 0xC30;
-    inline constexpr uintptr_t m_bIsIllusion        = 0xC2C;
-    inline constexpr uintptr_t m_flInvisibilityLevel= 0xC64;
-    inline constexpr uintptr_t m_iszUnitName        = 0xC78;
-    inline constexpr uintptr_t m_iDamageMin         = 0xD20;
-    inline constexpr uintptr_t m_iDamageMax         = 0xD24;
-    inline constexpr uintptr_t m_iDamageBonus       = 0xD28;
-    inline constexpr uintptr_t m_iMoveSpeed         = 0xBEC;
-    inline constexpr uintptr_t m_nPlayerOwnerID     = 0x12C8;
-    inline constexpr uintptr_t m_flLastAttackTime   = 0x12D0;
-    inline constexpr uintptr_t m_flDeathTime        = 0x152C;
-    inline constexpr uintptr_t m_flPhysicalArmorValue = 0x1534;
-    inline constexpr uintptr_t m_bSuppressGlow      = 0x1314;
+    inline constexpr uintptr_t m_iCurrentLevel      = 0xC9C;
+    inline constexpr uintptr_t m_bIsAncient         = 0xCA0;
+    inline constexpr uintptr_t m_bIsBossCreature    = 0xCA1;
+    inline constexpr uintptr_t m_bConsideredHero    = 0xCA7;
+    inline constexpr uintptr_t m_iAttackRange       = 0xCC8;
+    inline constexpr uintptr_t m_iHealthBarOffset   = 0xCF4;
+    inline constexpr uintptr_t m_flMana             = 0xCFC;
+    inline constexpr uintptr_t m_flMaxMana          = 0xD00;
+    inline constexpr uintptr_t m_vecAbilities       = 0xD28;
+    inline constexpr uintptr_t m_bIsIllusion        = 0xD24;
+    inline constexpr uintptr_t m_flInvisibilityLevel= 0xD5C;
+    inline constexpr uintptr_t m_iszUnitName        = 0xD70;
+    inline constexpr uintptr_t m_iDamageMin         = 0xE18;
+    inline constexpr uintptr_t m_iDamageMax         = 0xE1C;
+    inline constexpr uintptr_t m_iDamageBonus       = 0xE20;
+    inline constexpr uintptr_t m_iMoveSpeed         = 0xCE0;
+    inline constexpr uintptr_t m_nPlayerOwnerID     = 0x13C0;
+    inline constexpr uintptr_t m_flLastAttackTime   = 0x13C8;
+    inline constexpr uintptr_t m_flDeathTime        = 0x1624;
+    inline constexpr uintptr_t m_flPhysicalArmorValue = 0x162C;
+    inline constexpr uintptr_t m_bSuppressGlow      = 0x140C;
 }
 
 namespace Hero {
-    inline constexpr uintptr_t m_flRespawnTime      = 0x19D8;
-    inline constexpr uintptr_t m_iPlayerID          = 0x1A68;
-    inline constexpr uintptr_t m_bLifeState         = 0x1A34;
+    inline constexpr uintptr_t m_flRespawnTime      = 0x1AD8;
+    inline constexpr uintptr_t m_iPlayerID          = 0x1B68;
+    inline constexpr uintptr_t m_bLifeState         = 0x1B34;
+    inline constexpr uintptr_t m_wearCount          = 0xBC8;
+    inline constexpr uintptr_t m_wearBuf            = 0xBD0;
+    inline constexpr uintptr_t m_bDisableWearables  = 0x1AC0;
+}
+
+namespace Wearable {
+    inline constexpr uintptr_t m_bHiddenByEquipmentSlot = 0xD4D;
+}
+
+namespace Camera {
+    inline constexpr uintptr_t m_flCameraZoomAmount = 0xC94;
 }
 
 namespace Ability {
@@ -90,11 +102,11 @@ namespace Ability {
 }
 
 namespace Ctrl {
-    inline constexpr uintptr_t vtableRva = 0x48A0CE8;
-    inline constexpr uintptr_t m_bIsLocalPlayerController = 0x770;
-    inline constexpr uintptr_t m_nPlayerID          = 0x908;
-    inline constexpr uintptr_t m_hAssignedHero      = 0x90C;
-    inline constexpr uintptr_t m_hActiveAbility     = 0x994;
+    inline constexpr uintptr_t vtableRva = 0x4944B70;
+    inline constexpr uintptr_t m_bIsLocalPlayerController = 0x778;
+    inline constexpr uintptr_t m_nPlayerID          = 0x910;
+    inline constexpr uintptr_t m_hAssignedHero      = 0x914;
+    inline constexpr uintptr_t m_hActiveAbility     = 0x99C;
 }
 
 namespace RoshanSpawner {

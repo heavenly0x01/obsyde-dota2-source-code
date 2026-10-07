@@ -30,6 +30,9 @@ namespace cfg {
     inline bool lastHit   = true;
     inline bool deny      = true;
 
+    inline bool camEnable   = true;
+    inline float camDistance = 1800.0f;
+
     inline bool vbe       = false;
     inline bool glow      = false;
 
@@ -73,6 +76,7 @@ inline KeyBind items[] = {
     { "Purple glow", &cfg::glow },
     { "Auto dodge",  &cfg::autoDodge },
     { "Dota Plus",   &cfg::dotaPlus },
+    { "Zoom out",      &cfg::camEnable },
 };
 
 inline constexpr int kCount = (int)(sizeof(items) / sizeof(items[0]));

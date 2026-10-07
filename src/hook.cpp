@@ -309,11 +309,15 @@ static LRESULT CALLBACK hkWndProc(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
 }
 
 static void DoFrame() {
-    ImGui_ImplDX11_NewFrame();
-    ImGui_ImplWin32_NewFrame();
+    ImGui_ImplDX11_NewFrame();    ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
-    if (GetAsyncKeyState(cfg::menuKey) & 1) {
+    static int s_menuPrev = 0;
+    static int s_unloadPrev = 0;
+    static int s_frame = 0;
+    int menuDown = (GetAsyncKeyState(cfg::menuKey) & 0x8000) != 0;
+    int unloadDown = (GetAsyncKeyState(cfg::unloadKey) & 0x8000) != 0;
+    if (menuDown && !s_menuPrev) {
         cfg::menuOpen = !cfg::menuOpen;
         ImGui::GetIO().MouseDrawCursor = cfg::menuOpen;
         if (cfg::menuOpen) {
@@ -322,8 +326,11 @@ static void DoFrame() {
             ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
         }
     }
-    if (GetAsyncKeyState(cfg::unloadKey) & 1)
+    s_menuPrev = menuDown;
+    if (unloadDown && !s_unloadPrev && s_frame > 10)
         RequestUnload();
+    s_unloadPrev = unloadDown;
+    ++s_frame;
 
     binds::ProcessBinds();
 
@@ -331,8 +338,12 @@ static void DoFrame() {
         ClipCursor(nullptr);
 
     uintptr_t ctrl = game::g_sys.localCtrl;
-    if (mem::ValidPtr(ctrl))
+    if (mem::ValidPtr(ctrl)) {
         game::BuildFrame(g_frame, ctrl);
+        game::ApplyCamera();
+    } else {
+        game::ResetFrame(g_frame);
+    }
 
     view::Update();
 
