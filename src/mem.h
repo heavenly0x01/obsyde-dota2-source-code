@@ -95,5 +95,7 @@ const char* ClassOf(uintptr_t clientBase, uintptr_t vptr);
 
 void DetectDelta(uintptr_t clientBase, const uintptr_t* objects, int count);
 bool Ready();
+int Delta();
 
 }
+

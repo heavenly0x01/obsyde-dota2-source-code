@@ -1,6 +1,7 @@
 #include "hook.h"
 #include "theme.h"
 #include "offsets.h"
+#include "glass.h"
 
 #include <d3d11.h>
 #include <dxgi.h>
@@ -278,6 +279,7 @@ static void InitImGui(IDXGISwapChain* sc) {
 
     ImGui_ImplWin32_Init(g_hwnd);
     ImGui_ImplDX11_Init(g_device, g_ctx);
+    glass::Init(g_device, g_ctx);
 
     g_origWndProc = (WNDPROC)SetWindowLongPtrA(g_hwnd, GWLP_WNDPROC, (LONG_PTR)hkWndProc);
 
@@ -347,7 +349,7 @@ static void DoFrame() {
 
     view::Update();
 
-    if (cfg::menuOpen) DrawMenuWindow();
+    if (cfg::menuOpen || MenuFading()) DrawMenuWindow();
     DrawOverlay(g_frame);
     DrawKeybinds();
     RunAutomation(g_frame);
@@ -366,6 +368,7 @@ static HRESULT __stdcall hkPresent(IDXGISwapChain* sc, UINT sync, UINT flags) {
     if (!orig) return S_OK;
 
     if (cfg::running.load()) {
+        glass::OnPresent(sc);
         __try {
             if (!g_init && !g_initFailed) {
                 InitImGui(sc);
@@ -386,6 +389,7 @@ static HRESULT __stdcall hkPresent1(IDXGISwapChain1* sc, UINT sync, UINT flags, 
     if (!orig) return S_OK;
 
     if (cfg::running.load()) {
+        glass::OnPresent(sc);
         __try {
             if (!g_init && !g_initFailed) {
                 InitImGui(sc);
@@ -447,6 +451,7 @@ static DWORD WINAPI UnloadThread(LPVOID mod) {
         g_init = false;
     }
     if (g_rtv) { g_rtv->Release(); g_rtv = nullptr; }
+    glass::Shutdown();
     if (g_ctx) { g_ctx->Release(); g_ctx = nullptr; }
     if (g_device) { g_device->Release(); g_device = nullptr; }
 
@@ -463,3 +468,4 @@ void RequestUnload() {
     HANDLE t = CreateThread(nullptr, 0, UnloadThread, mod, 0, nullptr);
     if (t) CloseHandle(t);
 }
+

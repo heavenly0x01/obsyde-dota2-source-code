@@ -20,7 +20,6 @@ bool  g_roshanSeen = false;
 static std::mutex          g_lock;
 static std::vector<StaticUnit> g_units;
 
-
 static uintptr_t IdentityAddr(int index) {
     if (index < 0 || index >= off::maxIdPages * off::entsPerPage) return 0;
     uintptr_t page = g_sys.idPages[index >> 9];
@@ -221,21 +220,8 @@ static bool Classify(uintptr_t e, uintptr_t vptr, StaticUnit& u) {
     return true;
 }
 
-static bool DiscoverEntitySystem() {
-    uintptr_t base = g_sys.clientBase;
-    g_sys.esys = 0;
-
-    for (size_t i = 0; i < sizeof(off::esysRva) / sizeof(off::esysRva[0]); ++i) {
-        uintptr_t v = 0;
-        if (!mem::Read(base + off::esysRva[i], v) || !mem::ValidPtr(v)) continue;
-        uintptr_t vp = 0;
-        if (!mem::Read(v, vp) || vp != base + off::esysVtableRva) continue;
-        g_sys.esys = v;
-        break;
-    }
-    if (!g_sys.esys)
-        return false;
-
+static bool ValidateEs(uintptr_t v) {
+    g_sys.esys = v;
     if (!RefreshPages()) {
         g_sys.esys = 0;
         return false;
@@ -250,6 +236,34 @@ static bool DiscoverEntitySystem() {
     }
 
     return true;
+}
+
+static bool DiscoverEntitySystem() {
+    uintptr_t base = g_sys.clientBase;
+    g_sys.esys = 0;
+
+    const size_t nRva = sizeof(off::esysRva) / sizeof(off::esysRva[0]);
+    uintptr_t soft[3] = {};
+    int softN = 0;
+    const intptr_t d = rtti::Delta();
+
+    for (size_t i = 0; i < nRva; ++i) {
+        uintptr_t v = 0;
+        if (!mem::Read(base + off::esysRva[i], v) || !mem::ValidPtr(v)) continue;
+        uintptr_t vp = 0;
+        if (mem::Read(v, vp) &&
+            vp == base + off::esysVtableRva + (uintptr_t)d) {
+            if (ValidateEs(v)) return true;
+            continue;
+        }
+        if (softN < 3) soft[softN++] = v;
+    }
+
+    (void)nRva;
+    for (int i = 0; i < softN; ++i)
+        if (ValidateEs(soft[i])) return true;
+
+    return false;
 }
 
 static bool DetectMask(uintptr_t ctrl) {
@@ -338,7 +352,7 @@ void ScanLoop() {
             ++found;
             if (sampleN < 128) sample[sampleN++] = vptr;
 
-            if (vptr == g_sys.clientBase + off::Ctrl::vtableRva) {
+            if (vptr == g_sys.clientBase + off::Ctrl::vtableRva + (uintptr_t)rtti::Delta()) {
                 uint8_t loc = 0;
                 mem::Read(e + off::Ctrl::m_bIsLocalPlayerController, loc);
                 if (loc) localCtrl = e;
@@ -376,6 +390,35 @@ void ScanLoop() {
 
         if (!rtti::Ready() && sampleN >= 8)
             rtti::DetectDelta(g_sys.clientBase, sample, sampleN);
+
+        if (!localCtrl) {
+            uintptr_t byteCand = 0;
+            for (int i = 1; i <= 1024; ++i) {
+                uintptr_t e = ResolveIndex(i);
+                if (!mem::ValidPtr(e)) continue;
+                uintptr_t vp2 = 0;
+                if (!mem::Read(e, vp2)) continue;
+                if (vp2 < g_sys.clientBase || vp2 >= g_sys.clientBase + g_sys.imageSize) continue;
+                uint8_t loc = 0;
+                if (!mem::Read(e + off::Ctrl::m_bIsLocalPlayerController, loc) || !loc) continue;
+                uint32_t pid = 0xFFFFFFFFu;
+                mem::Read(e + off::Ctrl::m_nPlayerID, pid);
+                if (pid > 19u) continue;
+                uint32_t heroH = 0;
+                mem::Read(e + off::Ctrl::m_hAssignedHero, heroH);
+                uintptr_t hero = EntityByHandle(heroH);
+                if (mem::ValidPtr(hero)) {
+                    char nm[64] = {};
+                    if (ReadUnitName(hero, nm, sizeof(nm)) && StartsWith(nm, "npc_dota_hero_")) {
+                        localCtrl = e;
+                        break;
+                    }
+                } else if (!byteCand) {
+                    byteCand = e;
+                }
+            }
+            if (!localCtrl) localCtrl = byteCand;
+        }
 
         if (!g_rules) {
             for (int i = 1; i < 0x400 && !g_rules; ++i) {
@@ -596,7 +639,14 @@ void BuildFrame(Frame& f, uintptr_t ctrl) {
     if (!mem::ValidPtr(ctrl)) return;
 
     uintptr_t vp = 0;
-    if (!mem::Read(ctrl, vp) || vp != g_sys.clientBase + off::Ctrl::vtableRva) return;
+    if (!mem::Read(ctrl, vp)) return;
+    if (vp < g_sys.clientBase || vp >= g_sys.clientBase + g_sys.imageSize) return;
+
+    uint8_t locByte = 0;
+    mem::Read(ctrl + off::Ctrl::m_bIsLocalPlayerController, locByte);
+    uint32_t pid = 0xFFFFFFFFu;
+    mem::Read(ctrl + off::Ctrl::m_nPlayerID, pid);
+    if (!locByte || pid > 19u) return;
 
     RefreshPages();
 
@@ -756,3 +806,4 @@ void ApplyCamera() {
 }
 
 }
+

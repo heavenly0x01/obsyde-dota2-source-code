@@ -35,18 +35,22 @@ static const char* LookupDelta(uintptr_t clientBase, uintptr_t vptr, int delta) 
 
 bool Ready() { return g_ready; }
 
+int Delta() { return g_delta; }
+
 void DetectDelta(uintptr_t clientBase, const uintptr_t* objects, int count) {
     g_clientBase = clientBase;
-    static const int deltas[] = { 0, 8, -8, 16, -16, 4, -4, 24, -24 };
     int best = 0, bestScore = 0;
 
-    for (int d : deltas) {
+    for (int d = -512; d <= 512; d += 4) {
         int score = 0;
         for (int i = 0; i < count; ++i) {
             if (!objects[i]) continue;
             if (LookupDelta(clientBase, objects[i], d)) ++score;
         }
-        if (score > bestScore) { bestScore = score; best = d; }
+        int ad = d < 0 ? -d : d, ab = best < 0 ? -best : best;
+        if (score > bestScore || (score == bestScore && score > 0 && ad < ab)) {
+            bestScore = score; best = d;
+        }
     }
 
     g_delta = best;
@@ -70,3 +74,4 @@ const char* ClassOf(uintptr_t clientBase, uintptr_t vptr) {
 }
 
 }
+

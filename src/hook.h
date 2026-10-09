@@ -6,6 +6,7 @@ void InstallHooks();
 void RequestUnload();
 
 void DrawMenuWindow();
+bool MenuFading();
 
 namespace view {
 void Update();
@@ -17,3 +18,4 @@ void DrawOverlay(const Frame& f);
 void RunAutomation(const Frame& f);
 void DrawKeybinds();
 void RunAutoAccept();
+

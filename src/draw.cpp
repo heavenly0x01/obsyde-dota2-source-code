@@ -1,6 +1,7 @@
 #include "hook.h"
 #include "theme.h"
 #include "offsets.h"
+#include "glass.h"
 #include "imgui.h"
 
 #include <cfloat>
@@ -318,34 +319,63 @@ static void DrawCreepMarkers(const Frame& f, const FrameUnit& u, ImDrawList* dl)
     if (!lh && !dn) return;
 
     ImVec2 p;
-    Vec3 tp{ u.pos.x, u.pos.y, u.pos.z + 90.f };
+    Vec3 tp{ u.pos.x, u.pos.y, u.pos.z + u.hbOffset };
     if (!view::W2S(tp, p)) return;
 
-    float nextY = p.y;
-    if (lh) {
-        ImU32 col;
-        if (u.canLastHit)      col = IM_COL32(80, 235, 120, 255);
-        else if (u.hits <= 3)  col = IM_COL32(255, 214, 60, 255);
-        else                   col = IM_COL32(255, 214, 60, 150);
+    const float kStarR = 9.f;
+    const float kBarW  = 76.f, kBarH = 9.f;
+    const float kGap   = 3.f;
 
-        DrawStar(dl, ImVec2(p.x, p.y), 9.f, col);
+    ImU32 col = theme::White;
+    float bx = floorf(p.x - kBarW * 0.5f);
+    float by = floorf(p.y - kBarH) - 2.f;
+
+    if (lh) {
+        if      (u.canLastHit) col = IM_COL32( 60, 255, 110, 255);
+        else if (u.hits <= 3)  col = IM_COL32(255, 220,  40, 255);
+        else                   col = IM_COL32(255, 220,  40, 220);
+
+        dl->AddRectFilled(ImVec2(bx - 1.f, by - 1.f), ImVec2(bx + kBarW + 1.f, by + kBarH + 1.f),
+                          IM_COL32(0, 0, 0, 220));
+        float frac = (u.maxHp > 0) ? (float)u.hp / (float)u.maxHp : 0.f;
+        if (frac < 0.f) frac = 0.f;
+        if (frac > 1.f) frac = 1.f;
+        if (frac > 0.f)
+            dl->AddRectFilled(ImVec2(bx, by),
+                              ImVec2(bx + floorf(kBarW * frac + 0.5f), by + kBarH), col);
+        dl->AddRect(ImVec2(bx - 0.5f, by - 0.5f), ImVec2(bx + kBarW + 0.5f, by + kBarH + 0.5f),
+                    IM_COL32(0, 0, 0, 255), 0.f, 0, 1.f);
+        if (u.dmgOut > 1.f) {
+            int n = (int)((float)u.maxHp / u.dmgOut);
+            if (n >= 2 && n <= 80)
+                for (int k = 1; k < n; ++k) {
+                    float x = floorf(bx + kBarW * ((float)k * u.dmgOut / (float)u.maxHp)) + 0.5f;
+                    dl->AddLine(ImVec2(x, by + 1.f), ImVec2(x, by + kBarH - 1.f),
+                                IM_COL32(0, 0, 0, 200), 1.f);
+                }
+        }
+
+        ImVec2 c{ p.x, by - kGap - kStarR };
+        DrawStar(dl, c, kStarR, col);
+
         if (!u.canLastHit && u.hits > 1) {
             char n[8];
             snprintf(n, sizeof(n), "%d", u.hits);
-            DTextC(dl, n, p.x + 18.f, p.y - 8.f,
-                   theme::WithAlpha(theme::White, 225), 14.f);
+            DTextC(dl, n, p.x + 18.f, c.y - 7.f, theme::White, 14.f);
         }
-
-        float bw = 44.f, bx = p.x - bw * 0.5f, by = p.y + 12.f;
-        float frac = (u.maxHp > 0) ? (float)u.hp / (float)u.maxHp : 0.f;
-        DrawBar(dl, ImVec2(bx, by), bw, 5.f, frac, col, false, nullptr);
-        if (u.dmgOut > 1.f)
-            DrawSegTicks(dl, ImVec2(bx, by), bw, 5.f, (float)u.maxHp, u.dmgOut);
-        nextY = by + 7.f;
     }
+
     if (dn) {
-        DTextC(dl, "DENY", p.x, lh ? nextY + 4.f : p.y,
-               theme::WithAlpha(theme::White, 235), 15.f);
+        char txt[] = "DENY";
+        float tw = DTextW(txt, 13.f);
+        float dbx = p.x - (tw + 10.f) * 0.5f;
+        float dby = lh ? by + kBarH + 3.f : p.y;
+        dl->AddRectFilled(ImVec2(dbx, dby), ImVec2(dbx + tw + 10.f, dby + 16.f),
+                          theme::WithAlpha(theme::Black, 160), 4.f);
+        dl->AddRect(ImVec2(dbx, dby), ImVec2(dbx + tw + 10.f, dby + 16.f),
+                    theme::WithAlpha(theme::White, 70), 4.f, 0, 1.f);
+        DText(dl, txt, ImVec2(dbx + 5.f, dby + 1.f),
+              theme::WithAlpha(theme::White, 235), 13.f);
     }
 }
 
@@ -637,13 +667,12 @@ static void DrawDotaPlus(const Frame& f, ImDrawList* dl) {
 
     float x = s_x, y = s_y;
 
-    dl->AddRectFilled(ImVec2(x, y), ImVec2(x + pw, y + ph),
-                      IM_COL32(8, 4, 14, 205), 8.f);
-    dl->AddRect(ImVec2(x, y), ImVec2(x + pw, y + ph),
-                theme::WithAlpha(theme::Purple, 165), 8.f, 0, 1.4f);
+    glass::AddRect(ImVec2(x, y), ImVec2(x + pw, y + ph), 10.f);
+    dl->AddRectFilled(ImVec2(x, y), ImVec2(x + pw, y + ph), theme::Panel, 10.f);
+    dl->AddRect(ImVec2(x, y), ImVec2(x + pw, y + ph), theme::Border, 10.f, 0, 1.f);
     if (hover || s_drag)
         dl->AddRect(ImVec2(x - 2.f, y - 2.f), ImVec2(x + pw + 2.f, y + ph + 2.f),
-                    theme::WithAlpha(theme::PurpleLight, s_drag ? 235 : 130), 9.f, 0, 1.6f);
+                    theme::WithAlpha(theme::White, s_drag ? 90 : 45), 11.f, 0, 1.f);
 
     char buf[64];
 
@@ -698,7 +727,7 @@ static void DrawDotaPlus(const Frame& f, ImDrawList* dl) {
     float bx = x + pw * 0.5f - 70.f, bw = 140.f;
     float byy = y + 14.f;
     dl->AddRectFilled(ImVec2(bx, byy), ImVec2(bx + bw, byy + 6.f),
-                      IM_COL32(25, 14, 38, 255), 3.f);
+                      IM_COL32(255, 255, 255, 26), 3.f);
     dl->AddRectFilled(ImVec2(bx, byy), ImVec2(bx + bw * prob, byy + 6.f),
                       theme::Purple, 3.f);
 
@@ -715,9 +744,12 @@ static bool g_dodgeWarn = false;
 static void DrawAlerts(ImDrawList* dl) {
     if (g_dodgeWarn && (cfg::dodger || cfg::autoDodge)) {
         float cx = view::W * 0.5f, cy = view::H * 0.62f;
+        glass::AddRect(ImVec2(cx - 74.f, cy - 6.f), ImVec2(cx + 74.f, cy + 30.f), 8.f);
         dl->AddRectFilled(ImVec2(cx - 74.f, cy - 6.f), ImVec2(cx + 74.f, cy + 30.f),
-                          IM_COL32(0, 0, 0, 170), 6.f);
-        DTextC(dl, "DODGE!", cx, cy, IM_COL32(255, 90, 230, 255), 26.f);
+                          theme::WithAlpha(theme::Ink, 200), 8.f);
+        dl->AddRect(ImVec2(cx - 74.f, cy - 6.f), ImVec2(cx + 74.f, cy + 30.f),
+                    theme::Border, 8.f, 0, 1.f);
+        DTextC(dl, "DODGE!", cx, cy, IM_COL32(255, 120, 120, 255), 26.f);
     }
 }
 
@@ -1085,23 +1117,53 @@ void DrawKeybinds() {
     ImDrawList* dl = ImGui::GetBackgroundDrawList();
     if (!dl) return;
 
-    dl->AddRectFilled(ImVec2(x, y), ImVec2(x + w, y + h), IM_COL32(8, 4, 14, 205), 7.f);
-    dl->AddRect(ImVec2(x, y), ImVec2(x + w, y + h),
-                theme::WithAlpha(theme::Purple, 165), 7.f, 0, 1.3f);
+    glass::AddRect(ImVec2(x, y), ImVec2(x + w, y + h), 8.f);
+    dl->AddRectFilled(ImVec2(x, y), ImVec2(x + w, y + h), theme::Panel, 8.f);
+    dl->AddRect(ImVec2(x, y), ImVec2(x + w, y + h), theme::Border, 8.f, 0, 1.f);
     if (hover || s_drag)
         dl->AddRect(ImVec2(x - 2.f, y - 2.f), ImVec2(x + w + 2.f, y + h + 2.f),
-                    theme::WithAlpha(theme::PurpleLight, s_drag ? 235 : 130), 8.f, 0, 1.6f);
+                    theme::WithAlpha(theme::White, s_drag ? 90 : 45), 9.f, 0, 1.f);
     dl->AddText(f, fsz, ImVec2(x + pad + 1.f, y + pad + 1.f),
                 IM_COL32(0, 0, 0, 215), title);
-    dl->AddText(f, fsz, ImVec2(x + pad, y + pad), IM_COL32(168, 85, 247, 255), title);
+    dl->AddText(f, fsz, ImVec2(x + pad, y + pad), theme::White, title);
 
     float ly = y + pad + fsz + 5.f;
     for (int i = 0; i < n; ++i) {
-        ImU32 c = on[i] ? IM_COL32(226, 198, 255, 255) : IM_COL32(136, 125, 162, 255);
+        ImU32 c = on[i] ? IM_COL32(235, 235, 240, 255) : theme::Dim;
         dl->AddText(f, fsz, ImVec2(x + pad + 1.f, ly + 1.f), IM_COL32(0, 0, 0, 200), lines[i]);
         dl->AddText(f, fsz, ImVec2(x + pad, ly), c, lines[i]);
         ly += lineH;
     }
+}
+
+static bool CodePageOk(uintptr_t p) {
+    if ((p & 0xFFF) > 0xFFC) return false;
+    MEMORY_BASIC_INFORMATION mbi{};
+    if (VirtualQuery((LPCVOID)p, &mbi, sizeof(mbi)) != sizeof(mbi)) return false;
+    if (mbi.State != MEM_COMMIT) return false;
+    if (mbi.Protect & (PAGE_GUARD | PAGE_NOACCESS)) return false;
+    DWORD pr = mbi.Protect & 0xFF;
+    return pr == PAGE_EXECUTE || pr == PAGE_EXECUTE_READ ||
+           pr == PAGE_EXECUTE_READWRITE || pr == PAGE_EXECUTE_WRITECOPY;
+}
+
+static bool LooksLikeFunc(uintptr_t p) {
+    if (!CodePageOk(p)) return false;
+    const unsigned char* b = (const unsigned char*)p;
+    if (b[0] == 0x40 && (b[1] & 0xF0) == 0x50) return true;
+    if (b[0] == 0x55 || b[0] == 0x53 || b[0] == 0x56 || b[0] == 0x57) return true;
+    if (b[0] == 0xE9 || b[0] == 0xEB) return true;
+    if (b[0] == 0x33 && (b[1] & 0xC7) == 0xC0) return true;
+    if (b[0] == 0x48 || b[0] == 0x49 || b[0] == 0x4C || b[0] == 0x4D) {
+        if (b[1] == 0x83 && b[2] == 0xEC) return true;
+        if (b[1] == 0x8B && b[2] == 0xEC) return true;
+        if (b[1] == 0x8B && (b[2] & 0xC7) == 0x05) return true;
+        if (b[1] == 0x8B && (b[2] & 0xC7) == 0x0D) return true;
+        if (b[1] == 0x89 && (b[2] & 0xC7) == 0x44) return true;
+        if (b[1] == 0x8D) return true;
+        if (b[1] == 0x63) return true;
+    }
+    return false;
 }
 
 static void AutoAcceptTick() {
@@ -1135,9 +1197,21 @@ static void AutoAcceptTick() {
 
 void RunAutoAccept() {
     if (!cfg::autoAccept) return;
+    uintptr_t base = game::g_sys.clientBase;
+    if (!base) return;
+    static int s_valid = 0;
+    if (!s_valid) {
+        s_valid = (LooksLikeFunc(base + 0x1D7A810) &&
+                   LooksLikeFunc(base + 0x2286C90) &&
+                   LooksLikeFunc(base + 0x2292C40)) ? 1 : -1;
+        if (s_valid < 0) cfg::autoAccept = false;
+    }
+    if (s_valid < 0) return;
     __try {
         AutoAcceptTick();
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         cfg::autoAccept = false;
+        s_valid = -1;
     }
 }
+

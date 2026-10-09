@@ -6,7 +6,7 @@ namespace off {
 
 inline constexpr uintptr_t dwViewMatrix            = 0x621EB30;
 
-inline constexpr uintptr_t esysRva[3]     = { 0x5ED7F70, 0x65A7058, 0x61FD808 };
+inline constexpr uintptr_t esysRva[3]     = { 0x65A7068, 0x65A7058, 0x5ED7F70 };
 inline constexpr uintptr_t esysVtableRva  = 0x48AA168;
 inline constexpr uintptr_t idPagesOff     = 0x10;
 inline constexpr int       idStride       = 0x70;
@@ -159,3 +159,4 @@ enum ERoshanPhase : uint32_t {
 };
 
 }
+
