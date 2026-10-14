@@ -1177,8 +1177,8 @@ static void AutoAcceptTick() {
     typedef bool  (*SendReadyFn)(void*, int);
     typedef void* (*GetGlobalFn)();
 
-    GetMatchFn getMatch = (GetMatchFn)(base + 0x1D7A810);
-    void* mm = getMatch((void*)(base + 0x63CAE18));
+    GetMatchFn getMatch = (GetMatchFn)(base + off::getMatchRva);
+    void* mm = getMatch((void*)(base + off::containerRva));
     void* st = mm ? *(void**)((char*)mm + 0x18) : nullptr;
     if (!st) return;
 
@@ -1186,11 +1186,11 @@ static void AutoAcceptTick() {
     if (phase != 15) return;
     if (s_sentAt && now - s_sentAt < 2000) return;
 
-    GetGlobalFn getGlobal = (GetGlobalFn)(base + 0x2286C90);
+    GetGlobalFn getGlobal = (GetGlobalFn)(base + off::getGlobalRva);
     void* g = getGlobal();
     if (!g) return;
 
-    SendReadyFn sendReady = (SendReadyFn)(base + 0x2292C40);
+    SendReadyFn sendReady = (SendReadyFn)(base + off::sendReadyRva);
     sendReady(g, 1);
     s_sentAt = now;
 }
@@ -1201,9 +1201,9 @@ void RunAutoAccept() {
     if (!base) return;
     static int s_valid = 0;
     if (!s_valid) {
-        s_valid = (LooksLikeFunc(base + 0x1D7A810) &&
-                   LooksLikeFunc(base + 0x2286C90) &&
-                   LooksLikeFunc(base + 0x2292C40)) ? 1 : -1;
+        s_valid = (LooksLikeFunc(base + off::getMatchRva) &&
+                   LooksLikeFunc(base + off::getGlobalRva) &&
+                   LooksLikeFunc(base + off::sendReadyRva)) ? 1 : -1;
         if (s_valid < 0) cfg::autoAccept = false;
     }
     if (s_valid < 0) return;

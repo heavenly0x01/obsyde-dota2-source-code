@@ -2,6 +2,7 @@
 #include "mem.h"
 #include "game.h"
 #include "hook.h"
+#include "scan.h"
 #include <Shellapi.h>
 
 static DWORD WINAPI ScanThread(LPVOID) {
@@ -14,6 +15,7 @@ static DWORD WINAPI ScanThread(LPVOID) {
 
 static DWORD WINAPI InitThread(LPVOID) {
     while (cfg::running.load()) {
+        scan::Tick();
         game::TryInit();
         Sleep(game::g_sys.ready ? 1000 : 400);
     }

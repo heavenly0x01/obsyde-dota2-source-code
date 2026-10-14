@@ -80,6 +80,37 @@ inline bool ReadStr(uintptr_t addr, char* out, int cap) {
     return written > 0;
 }
 
+struct ModSec {
+    uint32_t va = 0;
+    uint32_t vsize = 0;
+    uint32_t flags = 0;
+};
+
+inline int ModSections(uintptr_t base, ModSec* out, int cap) {
+    if (!base || !out || cap <= 0) return 0;
+    int n = 0;
+    __try {
+        auto dos = (const IMAGE_DOS_HEADER*)base;
+        if (dos->e_magic != IMAGE_DOS_SIGNATURE) return 0;
+        auto nt = (const IMAGE_NT_HEADERS*)(base + dos->e_lfanew);
+        if (nt->Signature != IMAGE_NT_SIGNATURE) return 0;
+        int count = nt->FileHeader.NumberOfSections;
+        auto sec = IMAGE_FIRST_SECTION(nt);
+        for (int i = 0; i < count && n < cap; ++i) {
+            out[n].va = sec[i].VirtualAddress;
+            uint32_t vs = sec[i].Misc.VirtualSize;
+            if (!vs) vs = sec[i].SizeOfRawData;
+            out[n].vsize = vs;
+            out[n].flags = sec[i].Characteristics;
+            ++n;
+        }
+    }
+    __except (1) {
+        return 0;
+    }
+    return n;
+}
+
 }
 
 namespace rtti {
@@ -96,6 +127,10 @@ const char* ClassOf(uintptr_t clientBase, uintptr_t vptr);
 void DetectDelta(uintptr_t clientBase, const uintptr_t* objects, int count);
 bool Ready();
 int Delta();
+
+bool Build(uintptr_t base);
+uint32_t VtableByName(const char* name);
+int Count();
 
 }
 
